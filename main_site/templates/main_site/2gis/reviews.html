@@ -1,0 +1,343 @@
+{% extends 'main_site/base.html' %}
+{% load static %}
+
+{% block title %}Отзывы о филиале{% endblock %}
+{% block extra_styles %}
+<style>
+
+.rating-number {
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s, color 0.3s;
+    color: #ffffff; /* Цвет текста */
+    font-weight: bold;
+}
+
+.rating-number.selected {
+    background-color: #007bff; /* Цвет фона при выделении */
+    color: #ff0000; /* Цвет текста при выделении */
+}
+
+svg {
+    background-color: transparent; /* Убедитесь, что фон прозрачный */
+}
+    /* Скрытие подсказки по умолчанию */
+.tooltip {
+    display: none; /* Скрыть по умолчанию */
+    position: absolute;
+    bottom: 110%; /* Расположить над кнопкой */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: black;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 10;
+    opacity: 0; /* Сделать невидимым для плавности */
+    transition: opacity 0.2s ease-in-out; /* Плавное появление */
+}
+
+    /* Кнопка с SVG при наведении */
+    button:hover .icon-border {
+        stroke: red;
+    }
+
+ /* Показать текст при наведении на кнопку */
+button:hover + .tooltip {
+    display: block;
+    opacity: 1; /* Плавное появление */
+}
+
+    .side-panel {
+        background-color: #2c2c2c;
+        color: #fff;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+.rating-bar-container {
+    width: 100%; /* Фиксированная ширина контейнера */
+    max-width: 200px; /* Ограничение ширины для наглядности */
+    height: 10px; /* Высота всех линий */
+    background-color: #444; /* Цвет незаполненной линии */
+    border-radius: 5px;
+    overflow: hidden; /* Чтобы скрыть выход заполненной части */
+    position: relative; /* Для корректного позиционирования */
+}
+
+.rating-bar {
+    height: 100%; /* Заполнение контейнера */
+    border-radius: 5px; /* Скругление углов */
+}
+
+    /* Скрытие основной панели на мобильных устройствах */
+    @media (max-width: 768px) {
+        .desktop-side-panel {
+            display: none !important;
+        }
+    }
+
+    /* Скрытие мобильной панели на больших экранах */
+    @media (min-width: 769px) {
+        .mobile-side-panel {
+            display: none !important;
+        }
+    }
+
+    /* Стили для отзывов */
+    .loading-animation {
+        width: 100%;
+        height: 100px;
+        background: linear-gradient(90deg, #333 25%, #555 50%, #333 75%);
+        background-size: 200% 100%;
+        border-radius: 8px;
+        animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+        from {
+            background-position: 200% 0;
+        }
+        to {
+            background-position: -200% 0;
+        }
+    }
+
+
+    /* Стили карточки отзыва */
+.review-card {
+  background-color: #2c2c2c;
+  padding: 20px;
+  border-radius: 8px;
+  color: #fff;
+}
+
+/* Заголовок отзыва */
+.review-header .avatar {
+  width: 64px;
+  height: 64px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+}
+
+.review-header .user-info h5 {
+  margin-bottom: 0;
+}
+
+.review-header .badge {
+  font-size: 0.8em;
+}
+
+.rating-stars .star {
+  color: #f8b102;
+  font-size: 1.2em;
+  margin-left: 2px;
+}
+
+/* Фотографии отзыва */
+.review-photos img {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+/* Текст отзыва */
+.review-text {
+  color: #ccc;
+}
+
+.review-text a {
+  color: #1e90ff;
+  cursor: pointer;
+}
+
+/* Подвал карточки */
+.review-footer .btn-outline-light {
+  border-color: #fff;
+  color: #fff;
+}
+
+.review-footer .btn-outline-light:hover {
+  background-color: #fff;
+  color: #2c2c2c;
+}
+
+.likes svg {
+  fill: #f8b102;
+}
+
+.likes span {
+  color: #f8b102;
+}
+/* Темы */
+.themes {
+  color: #ffffff;
+}
+
+.themes span {
+  font-size: 0.9em;
+}
+    /* Панель ответа */
+    .reply-panel textarea {
+      background-color: #919191;
+      color: #fff;
+      border: 1px solid #555;
+    }
+    .reply-panel .btn-secondary {
+      background-color: #777;
+      border-color: #777;
+    }
+    .reply-panel .btn-secondary:hover {
+      background-color: #999;
+      border-color: #999;
+    }
+    .reply-panel .btn-primary {
+      background-color: #1e90ff;
+      border-color: #1e90ff;
+    }
+    .reply-panel .btn-primary:hover {
+      background-color: #3aa0ff;
+      border-color: #3aa0ff;
+    }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="dropdown" style="display: inline-block;" id="main-container" data-main-user-id="{{ main_user_id }}">
+        <!-- Кнопка для отображения текущего выбранного филиала -->
+        <button class="btn btn-lg dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false" style="background-color: #707070">
+            {% if filials|length > 0 %}
+                {{ filials.0.name }}
+            {% else %}
+                Выберите филиал
+            {% endif %}
+        </button>
+
+        <!-- Список кнопок с филиалами -->
+        <ul class="dropdown-menu w-100" id="filialDropdownMenu" aria-labelledby="dropdownMenuButton">
+            {% for filial in filials %}
+                <li>
+                    <button class="dropdown-item btn" type="button" data-filial-id="{{ filial.filial_id }}" onclick="sendFilialId(this)">
+                        {{ filial.name }}
+                    </button>
+                </li>
+            {% endfor %}
+        </ul>
+    </div>
+    <h1 class="text-center my-4">Отзывы</h1>
+    <table style="width: 100%;">
+        <tr>
+            <!-- Центральный блок с отзывами -->
+            <td style="width: 70%; vertical-align: top; padding-right: 15px;">
+
+                    <!-- Кнопка для отображения боковой панели на мобильных устройствах -->
+                <div class="d-md-none text-end mb-3">
+                    <button class="btn btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidePanel" aria-controls="mobileSidePanel">
+                        Показать меню
+                    </button>
+                </div>
+                <div id="reviews-container" class="reviews-container">
+                    <!-- Анимация загрузки -->
+                    <div class="loading-animation mb-3"></div>
+                </div>
+            </td>
+            <!-- Правая панель (desktop) -->
+            <td style="width: 30%; vertical-align: top;" class="desktop-side-panel">
+                <div class="side-panel text-center">
+                    <div class="loading-animation mb-3"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- Модальное окно для фотографий -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body">
+                <img id="modalImage" src="" alt="Развернутое изображение" class="img-fluid">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для жалобы -->
+<div class="modal fade" id="complaintModal" tabindex="-1" aria-labelledby="complaintModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background-color: #2c2c2c; color: #fff;">
+            <div class="modal-header" style="border-bottom: 1px solid #444;">
+                <h5 class="modal-title" id="complaintModalLabel">Причина жалобы</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Выбор причины (select) -->
+                <div class="mb-3">
+                    <label for="complaintReason" class="form-label">Выберите причину</label>
+                    <select id="complaintReason" class="form-select" style="background-color: #444; color: #fff; border: 1px solid #666;">
+                        <!-- Опция по умолчанию -->
+                        <option value="">--Не выбрано--</option>
+
+                        <!-- Ниже – варианты причин -->
+                        <option value="no_client">
+                            Такого клиента у нас не было
+                        </option>
+                        <option value="insults">
+                            В отзыве оскорбления/мат
+                        </option>
+                        <option value="other_words">
+                            Отзыв написан с чужих слов
+                        </option>
+                        <option value="ex_employee">
+                            Отзыв бывшего работника
+                        </option>
+                        <option value="client_refused">
+                            Клиент сам отказался от покупки
+                        </option>
+                        <option value="other_rules">
+                            Нарушены другие правила
+                        </option>
+                    </select>
+                </div>
+
+                <!-- Текст комментария (как и раньше) -->
+                <div class="mb-3">
+                    <label for="complaintText" class="form-label">Дополнительный комментарий</label>
+                <textarea id="complaintText" class="form-control" rows="4" placeholder="Введите текст жалобы..."
+                          style="background-color: #8a8a8a; color: #fff; border: 1px solid #666;"></textarea>
+                </div>
+
+                <!-- Скрытое поле для ID отзыва -->
+                <input type="hidden" id="complaintReviewId">
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #444;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" onclick="submitComplaint()">Отправить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Боковая панель для мобильных устройств -->
+<div class="offcanvas offcanvas-end bg-dark text-white mobile-side-panel" tabindex="-1" id="mobileSidePanel" aria-labelledby="mobileSidePanelLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="mobileSidePanelLabel">Меню</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Закрыть"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="loading-animation mb-3"></div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+    <script src={% static "main_site/js/2gis_reviews.js" %}></script>
+{% endblock %}
+

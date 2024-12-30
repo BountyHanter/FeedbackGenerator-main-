@@ -1,0 +1,60 @@
+# Системные файлы
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.swp
+.DS_Store
+Thumbs.db
+*.log
+*.sqlite3
+
+# Секреты и ключи
+.env
+*.env
+settings_local.py
+
+# Файлы виртуального окружения
+venv/
+env/
+.venv/
+.virtualenv/
+
+# Файлы и папки IDE
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# Сборка и кэширование
+build/
+dist/
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+*.coverage
+.coverage.*
+htmlcov/
+.tox/
+.pytest_cache/
+.mypy_cache/
+.cache/
+
+# Статические и медиа-файлы
+staticfiles/
+media/
+static/
+
+# Node.js файлы, если есть фронтенд
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+*.pid
+*.seed
+*.bak
+docker-compose.override.yml
+
