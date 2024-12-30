@@ -13,6 +13,10 @@ import os
 from pathlib import Path
 
 from django.contrib import staticfiles
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +43,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    "corsheaders",
     "main_site.apps.MainSiteConfig"
 ]
 
@@ -51,6 +57,8 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+MIDDLEWARE.insert(0, 'corsheaders.middleware.CorsMiddleware')
 
 ROOT_URLCONF = 'FeedbackGenerator.urls'
 
@@ -152,3 +160,14 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+CORS_ALLOWED_ORIGINS = [
+    os.getenv("ALLOWED_ORIGIN"),  # Адрес фронта
+]
+
+CORS_ALLOW_CREDENTIALS = True  # Для передачи cookies/токенов аутентификации
+
+CSRF_TRUSTED_ORIGINS = [
+    os.getenv("ALLOWED_ORIGIN"),  # Адрес фронта
+]
+CSRF_COOKIE_HTTPONLY = False  # Чтобы фронт мог читать токен из cookie
