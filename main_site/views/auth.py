@@ -1,4 +1,4 @@
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.contrib.auth import authenticate, login as auth_login
 from django.contrib.auth.models import User
 from django.shortcuts import render, redirect
@@ -6,30 +6,21 @@ from django.shortcuts import render, redirect
 
 def user_login(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
-        next_url = request.POST.get('next', 'reviews')
         username = request.POST['username']
         password = request.POST['password']
 
-        # Проверка на существование пользователя и его статус
+        # Check if the user exists and is active
         try:
             user = User.objects.get(username=username)
             if not user.is_active:
-                return render(request, 'main_site/login.html', {
-                    'error': 'Ваша учетная запись деактивирована, обратитесь к администрации.',
-                    'next': next_url
-                })
+                return JsonResponse({'error': 'Ваш аккаунт деактивирован. Обратитесь к администрации.'}, status=403)
         except User.DoesNotExist:
-            pass
+            return JsonResponse({'error': 'Юзер не найден.'}, status=404)
 
         user = authenticate(request, username=username, password=password)
         if user is not None:
             auth_login(request, user)
-            return redirect(next_url)
+            return JsonResponse({'message': 'Удачная авторизация.'}, status=200)
         else:
-            return render(request, 'main_site/login.html', {
-                'error': 'Неправильный логин или пароль',
-                'next': next_url
-            })
-    else:
-        next_url = request.GET.get('next', 'reviews')
-        return render(request, 'main_site/login.html', {'next': next_url})
+            return JsonResponse({'error': 'Не верный логин или пароль.'}, status=400)
+    return JsonResponse({'error': 'Метод не разрешён!'}, status=405)

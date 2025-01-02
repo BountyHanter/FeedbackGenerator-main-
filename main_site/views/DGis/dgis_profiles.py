@@ -1,68 +1,96 @@
 from asgiref.sync import sync_to_async
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
-from django.shortcuts import render
 from django.views.decorators.csrf import csrf_protect
 
+from FeedbackGenerator.api_auth import api_login_required
 from main_site.models.Dgis_models import DgisProfile, DgisFilial
 from main_site.services.Dgis.Dgis_service_api import link_profile_to_2gis
 from main_site.utils.password import encrypt_password
 
 
 @csrf_protect
-@login_required
+@api_login_required
 def list_2gis_profiles(request):
     user = request.user
+    # Получаем все профили пользователя
     dgis_profiles = user.dgis_profiles.all()
-    return render(request, 'main_site/2gis/profiles_settings.html', {'dgis_profiles': dgis_profiles})
+
+    # Формируем JSON-ответ
+    profiles_data = [
+        {
+            'id': profile.id,
+            'username': profile.username,
+            'name': profile.name,
+            'is_active': profile.is_active,  # Связано ли с сервисом
+        }
+        for profile in dgis_profiles
+    ]
+
+    return JsonResponse({'profiles': profiles_data}, status=200)
+
+
+# @csrf_protect
+# @api_login_required
+# def render_2gis_profiles_selection(request):
+#     profiles = DgisProfile.objects.filter(user=request.user, is_active=True)
+#
+#     # Передаем профили в контекст
+#     context = {
+#         'profiles': profiles
+#     }
+#     return render(request, 'main_site/2gis/profiles_list.html', context)
 
 
 @csrf_protect
-@login_required
-def render_2gis_profiles_selection(request):
-    profiles = DgisProfile.objects.filter(user=request.user, is_active=True)
-
-    # Передаем профили в контекст
-    context = {
-        'profiles': profiles
-    }
-    return render(request, 'main_site/2gis/profiles_list.html', context)
-
-
-@csrf_protect
-@login_required
+@api_login_required
 def create_2gis_profile(request):
     user = request.user
 
     if request.method == 'POST':
         try:
+            required_fields = ['username', 'password']
+            missing_fields = [field for field in required_fields if not request.POST.get(field)]
+
+            if missing_fields:
+                return JsonResponse({'error': f"Отсутствуют обязательные поля: {', '.join(missing_fields)}"}, status=400)
+
             username = request.POST.get('username')
             password = request.POST.get('password')
-
-            if not username or not password:
-                return JsonResponse({'error': 'username or password is empty'}, status=400)
+            name = request.POST.get('name', None)  # Это поле не обязательно
 
             # Хешируем пароль
             hashed_password = encrypt_password(password)
 
             # Создаем профиль пользователя
-            DgisProfile.objects.create(
+            new_profile = DgisProfile.objects.create(
                 user=user,
+                name=name,
                 username=username,
                 hashed_password=hashed_password,
             )
 
-            # Возвращаем успешный ответ
-            return JsonResponse({"success": True})
+            # Возвращаем успешный ответ с данными профиля
+            return JsonResponse({
+                "success": True,
+                "profile": {
+                    "id": new_profile.id,
+                    "username": new_profile.username,
+                    "name": new_profile.name,
+                    "is_active": new_profile.is_active,
+                }
+            }, status=201)
 
         except Exception as e:
             print(f"Ошибка: {e}")
             return JsonResponse({"error": str(e)}, status=500)
 
+    return JsonResponse({"error": "Метод не разрешён!"}, status=405)
+
 
 @csrf_protect
-@login_required
-async def update_or_create_2gis_profile(request, profile_id):
+@api_login_required
+async def link_2gis_profile(request, profile_id):
     user_id = request.session.get('_auth_user_id')
     if not user_id:
         return JsonResponse({'error': 'Не авторизован'}, status=401)
@@ -112,7 +140,7 @@ async def update_or_create_2gis_profile(request, profile_id):
             for filial in filial_data:
                 # Обновляем или создаем филиал
                 await sync_to_async(DgisFilial.objects.create)(
-                    filial_id=int(filial['id']),
+                    dgis_filial_id=int(filial['id']),
                     profile=profile,
                     name=filial['name']
                 )
@@ -133,4 +161,6 @@ async def update_or_create_2gis_profile(request, profile_id):
                 return JsonResponse({"error": f"Неизвестная ошибка {status_code}"}, status=status_code)
 
         # Возвращаем результат
-        return JsonResponse({"message": "Задача успешно обработана"})
+        return JsonResponse({"message": "Задача успешно обработана"}, status=200)
+
+    return JsonResponse({'error': 'Метод не разрешён!'}, status=405)

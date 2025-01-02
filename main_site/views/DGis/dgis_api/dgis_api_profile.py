@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from dotenv import load_dotenv
 
+from FeedbackGenerator.api_auth import api_login_required
 from main_site.models.Dgis_models import DgisProfile, DgisFilial
 from main_site.utils.password import encrypt_password
 
@@ -15,15 +16,17 @@ load_dotenv()
 
 DGIS_SERVER_URL = os.getenv("DGIS_SERVICE_ADDRESS")
 
+
 @csrf_protect
-@login_required
-def sync_2gis_profile(request, profile_id):
+@api_login_required
+def update_2gis_profile(request, profile_id):
     user = request.user
 
     if request.method == 'POST':
         try:
             username = request.POST.get('username')
             password = request.POST.get('password')
+            name = request.POST.get('name')
 
             profile = DgisProfile.objects.get(id=profile_id)
 
@@ -34,20 +37,30 @@ def sync_2gis_profile(request, profile_id):
             if password:
                 hashed_password = encrypt_password(password)
                 profile.hashed_password = hashed_password
+            if name:
+                profile.name = name
             profile.is_active = False
             profile.save()
 
-            return JsonResponse({'message': 'Профиль обновлён!'}, status=200)
+            return JsonResponse({
+                'message': 'Профиль обновлён!',
+                'profile': {
+                    'id': profile.id,
+                    'username': profile.username,
+                    'name': profile.name,
+                    'is_active': profile.is_active,
+                }
+            }, status=200)
         except DgisProfile.DoesNotExist:
             return JsonResponse({'error': 'Профиль не найден!'}, status=404)
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=404)
-    else:
-        return JsonResponse({'error': 'Method Not Allowed'}, status=405)
+
+    return JsonResponse({'error': 'Метод не разрешён!'}, status=405)
 
 
 @csrf_protect
-@login_required
+@api_login_required
 def trigger_2gis_stats_collection(request):
     """
     Инициирует сбор статистики для указанного филиала.
@@ -66,7 +79,7 @@ def trigger_2gis_stats_collection(request):
 
             # Ищем филиал по filial_id
             try:
-                filial = DgisFilial.objects.select_related('profile').get(filial_id=str(filial_id))
+                filial = DgisFilial.objects.select_related('profile').get(dgis_filial_id=str(filial_id))
             except DgisFilial.DoesNotExist:
                 return JsonResponse({"error": "Филиал с таким filial_id не найден"}, status=404)
 
@@ -89,7 +102,7 @@ def trigger_2gis_stats_collection(request):
                 return JsonResponse({"message": "Сбор статистики инициирован"}, status=200)
             else:
                 return JsonResponse({"error": "Ошибка при обращении к сервису", "details": response.json()},
-                                    status=response.status_code)
+                                    status=502)
 
         except json.JSONDecodeError:
             return JsonResponse({"error": "Неверный формат JSON"}, status=400)

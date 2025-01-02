@@ -15,9 +15,9 @@ class DgisProfile(models.Model):
 
 class DgisFilial(models.Model):
     profile = models.ForeignKey(DgisProfile, on_delete=models.CASCADE, related_name="filials")
-    filial_id = models.CharField(max_length=50)  # ID филиала
+    dgis_filial_id = models.CharField(max_length=50)  # ID филиала
     name = models.CharField(max_length=255)  # Название филиала
     is_active = models.BooleanField(default=False)  # Выбран ли филиал юзером
 
     def __str__(self):
-        return f"{self.name} ({self.filial_id})"
+        return f"{self.name} ({self.dgis_filial_id})"
