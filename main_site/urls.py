@@ -1,6 +1,6 @@
 from django.urls import path, include
 
-from FeedbackGenerator.get_csrf import get_csrf_token
+from FeedbackGenerator.utils.get_csrf import get_csrf_token
 from main_site.views.DGis.dgis_api.dgis_api_profiles import APIDGISProfiles
 from main_site.views.DGis.dgis_api.dgis_api_reviews import APIDGISReviews
 from main_site.views.DGis.dgis_profiles import DGISProfiles

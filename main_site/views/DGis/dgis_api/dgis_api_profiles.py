@@ -2,7 +2,7 @@ import json
 import os
 
 import httpx
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync
 from dotenv import load_dotenv
 from rest_framework import status
 from rest_framework.exceptions import ParseError
@@ -18,26 +18,38 @@ DGIS_SERVER_URL = os.getenv("DGIS_SERVICE_ADDRESS")
 
 
 class APIDGISProfiles(APIView):
+    """
+    Синхронный вариант вью, но сами запросы к внешнему сервису выполняются асинхронно
+    и оборачиваются в async_to_sync, чтобы мы могли дождаться их результата.
+    """
     permission_classes = [IsAuthenticated]
 
-    async def get(self, request, action=None):
+    def get(self, request, action=None):
         """
         Обработка GET-запросов в зависимости от действия.
         """
         if action == 'reviews':
-            return await self.get_reviews(request)
+            return self.get_reviews(request)
         elif action == 'stats':
-            return await self.fetch_stats(request)
+            return self.fetch_stats(request)
         else:
-            return Response({'error': 'Неизвестное действие'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Метод не разрешён'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
 
-    async def post(self, request, action=None):
+    def post(self, request, action=None):
         if action == 'trigger_stats':
-            return await self.trigger_stats_collection(request)
+            return self.trigger_stats_collection(request)
         else:
-            return Response({'error': 'Неизвестное действие'}, status=status.HTTP_400_BAD_REQUEST)
-
-    async def get_reviews(self, request):
+            return Response(
+                {'error': 'Метод не разрешён'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+    # ---------------------------
+    # Синхронные методы для GET
+    # ---------------------------
+    def get_reviews(self, request):
         required_params = ['main_user_id', 'filial_id']
         missing_params = [param for param in required_params if not request.GET.get(param)]
 
@@ -55,7 +67,7 @@ class APIDGISProfiles(APIView):
         without_answer = request.GET.get('without_answer')
         is_favorite = request.GET.get('is_favorite')
 
-        SERVICE_URL = f"{DGIS_SERVER_URL}/api/get_reviews"
+        service_url = f"{DGIS_SERVER_URL}/api/get_reviews"
 
         params = {
             "main_user_id": main_user_id,
@@ -71,109 +83,108 @@ class APIDGISProfiles(APIView):
         if is_favorite:
             params["is_favorite"] = True
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(SERVICE_URL, params=params)
-                response.raise_for_status()
-                response_data = response.json()
+        # Выполняем асинхронный запрос через async_to_sync
+        response_data = async_to_sync(self._async_get)(service_url, params)
 
-                reviews = response_data.get("reviews", [])
-                filtered_reviews = []
-                for review in reviews:
-                    photos = review.get("photos")
-                    if isinstance(photos, list) and all(isinstance(photo, str) for photo in photos):
-                        filtered_photos = photos
-                    elif isinstance(photos, list):
-                        filtered_photos = [
-                            photo.get("preview_urls", {}).get("url") for photo in photos if isinstance(photo, dict)
-                        ]
-                    else:
-                        filtered_photos = None
+        # Если _async_get вернёт уже готовый DRF-Response (ошибка или что-то подобное),
+        # то просто возвращаем его. Иначе это словарь, распарсенный из JSON.
+        if isinstance(response_data, Response):
+            return response_data
 
-                    filtered_review = {
-                        "id": review.get("id"),
-                        "rating": list(range(review.get("rating", 0))),
-                        "text": review.get("text", "Без текста"),
-                        "dateCreated": review.get("created_at"),
-                        "name": review.get("user_name"),
-                        "commentsCount": review.get("comments_count", 0),
-                        "likesCount": review.get("likes_count", 0),
-                        "photos": filtered_photos,
-                        "is_favorite": review.get('is_favorite'),
-                    }
-                    filtered_reviews.append(filtered_review)
+        reviews = response_data.get("reviews", [])
+        filtered_reviews = []
 
-                return Response(
-                    {
-                        "reviews": filtered_reviews,
-                        "count": len(filtered_reviews),
-                        "filial_id": filial_id
-                    },
-                    status=200
-                )
+        for review in reviews:
+            photos = review.get("photos")
+            if isinstance(photos, list) and all(isinstance(photo, str) for photo in photos):
+                filtered_photos = photos
+            elif isinstance(photos, list):
+                filtered_photos = [
+                    photo.get("preview_urls", {}).get("url") for photo in photos if isinstance(photo, dict)
+                ]
+            else:
+                filtered_photos = None
 
-            except httpx.RequestError as exc:
-                return Response({"error": "Ошибка подключения к сервису"}, status=500)
-            except httpx.HTTPStatusError as exc:
-                return Response(
-                    {"error": f"Ошибка сервиса: {exc.response.status_code}"},
-                    status=exc.response.status_code
-                )
+            filtered_review = {
+                "id": review.get("id"),
+                "rating": (review.get("rating", 0)),
+                "text": review.get("text", "Без текста"),
+                "dateCreated": review.get("created_at"),
+                "name": review.get("user_name"),
+                "commentsCount": review.get("comments_count", 0),
+                "likesCount": review.get("likes_count", 0),
+                "photos": filtered_photos,
+                "is_favorite": review.get('is_favorite'),
+            }
+            filtered_reviews.append(filtered_review)
 
-    async def fetch_stats(self, request):
+        return Response(
+            {
+                "reviews": filtered_reviews,
+                "count": len(filtered_reviews),
+                "filial_id": filial_id
+            },
+            status=200
+        )
+
+    def fetch_stats(self, request):
         filial_id = request.GET.get('filial_id')
 
         if not filial_id:
             return Response({"error": "Отсутствует обязательный параметр - filial_id"}, status=400)
 
-        SERVICE_URL = f"{DGIS_SERVER_URL}/api/stats/{filial_id}"
+        service_url = f"{DGIS_SERVER_URL}/api/stats/{filial_id}"
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(SERVICE_URL)
-                response.raise_for_status()
-                data = response.json()
+        response_data = async_to_sync(self._async_get)(service_url)
+        if isinstance(response_data, Response):
+            if response_data.status_code == 404:
+                # При желании можно вернуть, например, статус 200, но с сообщением, что данных нет
+                return Response({"status": "Данных нет"}, status=200)
+            return response_data
 
-                if response.status_code == 404:
-                    return Response({"status": "Данных нет"}, status=200)
+        # Разбор состояния
+        if response_data.get("status") == "pending":
+            return Response({"status": "В очереди"}, status=200)
 
-                if data["status"] == "pending":
-                    return Response({"status": "В очереди"}, status=200)
+        if response_data.get("status") == "in_progress":
+            return Response(
+                {
+                    "status": "В процессе",
+                    "end_parsing_time": response_data.get("end_parsing_time")
+                },
+                status=200
+            )
 
-                if data["status"] == "in_progress":
-                    return Response(
-                        {"status": "В процессе", "end_parsing_time": data.get("end_parsing_time")},
-                        status=200
-                    )
+        # Считаем проценты
+        data = response_data
+        count_reviews = data.get("count_reviews") or 1  # на всякий случай от деления на 0
+        result = {
+            "one_star_count": data["one_star"],
+            "one_star_percent": round((data["one_star"] / count_reviews) * 100),
+            "two_stars_count": data["two_stars"],
+            "two_stars_percent": round((data["two_stars"] / count_reviews) * 100),
+            "three_stars_count": data["three_stars"],
+            "three_stars_percent": round((data["three_stars"] / count_reviews) * 100),
+            "four_stars_count": data["four_stars"],
+            "four_stars_percent": round((data["four_stars"] / count_reviews) * 100),
+            "five_stars_count": data["five_stars"],
+            "five_stars_percent": round((data["five_stars"] / count_reviews) * 100),
+            "rating": data["rating"],
+            "count_reviews": data["count_reviews"],
+        }
+        return Response({"status": "Данные собраны", "result": result}, status=200)
 
-                result = {
-                    "one_star_percent": round((data["one_star"] / data["count_reviews"]) * 100),
-                    "two_stars_percent": round((data["two_stars"] / data["count_reviews"]) * 100),
-                    "three_stars_percent": round((data["three_stars"] / data["count_reviews"]) * 100),
-                    "four_stars_percent": round((data["four_stars"] / data["count_reviews"]) * 100),
-                    "five_stars_percent": round((data["five_stars"] / data["count_reviews"]) * 100),
-                    "rating": data["rating"],
-                    "count_reviews": data["count_reviews"],
-                }
-
-                return Response({"status": "Данные собраны", "result": result}, status=200)
-
-            except httpx.RequestError:
-                return Response({"error": "Ошибка подключения к сервису"}, status=503)
-            except httpx.HTTPStatusError as exc:
-                return Response(
-                    {"error": f"Ошибка сервиса: {exc.response.status_code}"},
-                    status=exc.response.status_code
-                )
-
-    async def trigger_stats_collection(self, request):
+    # ---------------------------
+    # Синхронный метод для POST
+    # ---------------------------
+    def trigger_stats_collection(self, request):
         """
         Инициирует сбор статистики для указанного филиала.
         """
         try:
             # Преобразование тела запроса в JSON
             try:
-                body = json.loads(request.body.decode('utf-8'))
+                body = request.data
             except (json.JSONDecodeError, AttributeError):
                 raise ParseError("Некорректный формат JSON")
 
@@ -182,11 +193,9 @@ class APIDGISProfiles(APIView):
             if not filial_id:
                 return Response({"error": "filial_id отсутствует в запросе"}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Ищем филиал по filial_id
+            # Ищем филиал по filial_id (синхронно)
             try:
-                filial = await sync_to_async(
-                    lambda: DgisFilial.objects.select_related('profile').get(dgis_filial_id=str(filial_id))
-                )()
+                filial = DgisFilial.objects.select_related('profile').get(dgis_filial_id=str(filial_id))
             except DgisFilial.DoesNotExist:
                 return Response({"error": "Филиал с таким filial_id не найден"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -201,17 +210,60 @@ class APIDGISProfiles(APIView):
                 "filial_id": filial_id
             }
 
-            # Асинхронный запрос к внешнему сервису
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload, headers=headers)
+            # Отправляем запрос к сервису (асинхронно, но с async_to_sync)
+            response_httpx = async_to_sync(self._async_post)(url, payload, headers)
 
-                if response.status_code == 200:
-                    return Response({"message": "Сбор статистики инициирован"}, status=status.HTTP_200_OK)
-                else:
-                    return Response(
-                        {"error": "Ошибка при обращении к сервису", "details": response.json()},
-                        status=status.HTTP_502_BAD_GATEWAY
-                    )
+            # Если _async_post вернул сразу DRF Response — значит упали на ошибке
+            if isinstance(response_httpx, Response):
+                return response_httpx
+
+            # Если пришёл ответ, смотрим код
+            if response_httpx.status_code == 200:
+                return Response({"message": "Сбор статистики инициирован"}, status=status.HTTP_200_OK)
+            else:
+                # Если сервис вернул не 200
+                try:
+                    details = response_httpx.json()
+                except Exception:
+                    details = {"raw_body": response_httpx.text}
+                return Response(
+                    {"error": "Ошибка при обращении к микросервису 2gis", "details": details},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
 
         except Exception as e:
             return Response({"error": f"Ошибка: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # --------------------------------------------------
+    # Вспомогательные асинхронные методы для запросов
+    # --------------------------------------------------
+    async def _async_get(self, url, params=None):
+        """
+        Асинхронный GET-запрос, возвращает либо словарь (response.json()),
+        либо DRF Response (при ошибке).
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                return response.json()
+            except httpx.RequestError:
+                return Response({"error": "Ошибка подключения к микросервису 2gis"}, status=500)
+            except httpx.HTTPStatusError as exc:
+                return Response({"error": f"Ошибка микросервиса 2gis: {exc.response.status_code}"},
+                                status=exc.response.status_code)
+
+    async def _async_post(self, url, payload, headers):
+        """
+        Асинхронный POST-запрос, возвращает сам объект response (чтобы мы взяли .status_code и т.п.),
+        либо DRF Response (при ошибке).
+        """
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                return response  # Возвращаем httpx.Response, чтобы в основном коде смотреть статус и тело
+            except httpx.RequestError:
+                return Response({"error": "Ошибка подключения к микросервису 2gis"}, status=500)
+            except httpx.HTTPStatusError as exc:
+                return Response({"error": f"Ошибка микросервиса 2gis: {exc.response.status_code}"},
+                                status=exc.response.status_code)

@@ -1,9 +1,10 @@
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from FeedbackGenerator.utils.check_method import check_method
 from main_site.models.Dgis_models import DgisProfile, DgisFilial
 from main_site.services.Dgis.Dgis_service_api import link_profile_to_2gis
 from main_site.utils.password import encrypt_password
@@ -12,7 +13,12 @@ from main_site.utils.password import encrypt_password
 class DGISProfiles(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request):
+    def get(self, request, action=None, profile_id=None):
+        if action in ['create', 'link', 'update']:
+            return Response(
+                {'error': 'Метод не разрешён'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
         user = request.user
         # Получаем все профили пользователя
         dgis_profiles = user.dgis_profiles.all()
@@ -31,14 +37,29 @@ class DGISProfiles(APIView):
         return Response({'profiles': profiles_data}, status=200)
 
     def post(self, request, action=None, profile_id=None):
+        # Проверяем разрешённые методы для каждого действия
         if action == 'create':
+            method_check = check_method(request, ['POST'])
+            if method_check:  # Если метод не разрешён, возвращаем Response
+                return method_check
             return self.create_profile(request)
-        elif action == 'link' and profile_id:
+
+        elif action == 'link':
+            method_check = check_method(request, ['POST'])
+            if method_check:
+                return method_check
             return self.link_profile(request, profile_id)
-        elif action == 'update' and profile_id:
+
+        elif action == 'update':
+            method_check = check_method(request, ['POST'])
+            if method_check:
+                return method_check
             return self.update_profile(request, profile_id)
-        else:
-            return Response({'error': 'Неизвестное действие или неверный запрос'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {'error': 'Метод не разрешён'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
 
     def create_profile(self, request):
         user = request.user
@@ -71,7 +92,7 @@ class DGISProfiles(APIView):
 
             # Возвращаем успешный ответ с данными профиля
             return Response({
-                "success": True,
+                "status": 'ok',
                 "profile": {
                     "id": new_profile.id,
                     "username": new_profile.username,
@@ -109,6 +130,7 @@ class DGISProfiles(APIView):
             profile.save()
 
             return Response({
+                'status': 'ok',
                 'message': 'Профиль обновлён!',
                 'profile': {
                     'id': profile.id,
@@ -123,18 +145,21 @@ class DGISProfiles(APIView):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    async def link_profile(self, request, profile_id):
-        user_id = await sync_to_async(lambda: request.user.id)()
+    def link_profile(self, request, profile_id):
+        user_id = request.user.id
 
         try:
-            profile = await sync_to_async(
-                lambda: DgisProfile.objects.select_related('user').get(id=profile_id)
-            )()
+            # Синхронно получаем профиль
+            profile = DgisProfile.objects.select_related('user').get(id=profile_id)
         except DgisProfile.DoesNotExist:
             return Response({"error": "Профиль не найден!"}, status=status.HTTP_404_NOT_FOUND)
 
+        # Проверка принадлежности профиля пользователю
         if profile.user_id != user_id:
-            return Response({'error': 'Данный профиль не принадлежит вам!'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'Данный профиль не принадлежит вам!'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         data = {
             "main_user_id": profile.id,
@@ -143,8 +168,10 @@ class DGISProfiles(APIView):
         }
 
         try:
-            response_data = await link_profile_to_2gis(data=data)
+            # Вызываем асинхронную функцию link_profile_to_2gis через async_to_sync
+            response_data = async_to_sync(link_profile_to_2gis)(data=data)
 
+            # Обрабатываем ответ
             user_info_and_filials = response_data.get('user_info_and_filials', [])
             filial_data = []
 
@@ -158,26 +185,31 @@ class DGISProfiles(APIView):
                                     'name': fil['name']
                                 })
 
-            await sync_to_async(
-                lambda: DgisFilial.objects.filter(profile=profile).delete()
-            )()
+            # Синхронно удаляем старые филиалы
+            DgisFilial.objects.filter(profile=profile).delete()
 
+            # Синхронно создаём новые
             for filial in filial_data:
-                await sync_to_async(DgisFilial.objects.create)(
+                DgisFilial.objects.create(
                     dgis_filial_id=int(filial['id']),
                     profile=profile,
                     name=filial['name']
                 )
 
+            # Активируем профиль
             profile.is_active = True
-            await sync_to_async(profile.save)()
+            profile.save()
+
+            return Response(
+                {"status": 'ok', "message": "Профиль успешно привязан"},
+                status=status.HTTP_200_OK
+            )
 
         except Exception as e:
+            # Пытаемся извлечь статус-код из текста исключения
             try:
-                # Попытка извлечь статус-код из строки ошибки
                 status_code = int(str(e))
             except ValueError:
-                # Если не удалось преобразовать ошибку в статус-код
                 status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
 
             # Карта ошибок
@@ -187,10 +219,8 @@ class DGISProfiles(APIView):
                 502: "Не удалось обновить данные на сервисе",
             }
 
-            # Определение сообщения об ошибке
             error_message = error_map.get(status_code, f"Неизвестная ошибка: {e}")
             return Response({"error": error_message}, status=status_code)
-
 
 # @csrf_protect
 # @api_login_required

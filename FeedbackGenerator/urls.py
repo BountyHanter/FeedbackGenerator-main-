@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from django.http import JsonResponse
 
 from django.contrib.auth import views as auth_views
 
@@ -29,3 +30,25 @@ urlpatterns = [
     path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('', include('main_site.urls')),
 ]
+
+
+def custom_404(request, exception=None):
+    return JsonResponse({"error": "Ресурс не найден", "status": 404}, status=404)
+
+
+def custom_500(request):
+    return JsonResponse({"error": "Внутренняя ошибка сервера", "status": 500}, status=500)
+
+
+def custom_403(request, exception=None):
+    return JsonResponse({"error": "Доступ запрещён", "status": 403}, status=403)
+
+
+def custom_400(request, exception=None):
+    return JsonResponse({"error": "Некорректный запрос", "status": 400}, status=400)
+
+
+handler404 = 'FeedbackGenerator.urls.custom_404'
+handler500 = 'FeedbackGenerator.urls.custom_500'
+handler403 = 'FeedbackGenerator.urls.custom_403'
+handler400 = 'FeedbackGenerator.urls.custom_400'

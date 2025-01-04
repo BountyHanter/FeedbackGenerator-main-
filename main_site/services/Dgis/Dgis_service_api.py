@@ -21,7 +21,6 @@ async def link_profile_to_2gis(*, data: dict):
     url = f'{DGIS_ADDRESS}/api/create_or_update_user'
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.post(url, json=data)
-        print(response.json())
 
         if response.status_code == 201:
             return response.json()  # Возвращаем результат
