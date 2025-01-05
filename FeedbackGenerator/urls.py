@@ -20,14 +20,14 @@ from django.http import JsonResponse
 
 from django.contrib.auth import views as auth_views
 
-from main_site.views.auth import user_login
+from main_site.views.auth import UserLoginAPIView, LogoutAPIView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     # Auth
-    path('login/', user_login, name='login'),
-    path('logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
+    path('login/', UserLoginAPIView.as_view()),
+    path('logout/', LogoutAPIView.as_view()),
     path('', include('main_site.urls')),
 ]
 

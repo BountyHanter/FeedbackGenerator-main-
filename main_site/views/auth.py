@@ -1,25 +1,38 @@
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.contrib.auth import authenticate, login as auth_login
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from django.contrib.auth import authenticate, login as auth_login, logout
 from django.contrib.auth.models import User
 
 
-def user_login(request: HttpRequest) -> HttpResponse:
-    if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+class UserLoginAPIView(APIView):
+    permission_classes = [permissions.AllowAny]  # Или другие нужные разрешения
 
-        # Check if the user exists and is active
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+
+        # Проверим, что такой пользователь существует
         try:
-            user = User.objects.get(username=username)
-            if not user.is_active:
-                return JsonResponse({'error': 'Ваш аккаунт деактивирован. Обратитесь к администрации.'}, status=403)
+            user_obj = User.objects.get(username=username)
+            if not user_obj.is_active:
+                return Response({'error': 'Ваш аккаунт деактивирован. Обратитесь к администрации.'},
+                                status=status.HTTP_403_FORBIDDEN)
         except User.DoesNotExist:
-            return JsonResponse({'error': 'Юзер не найден.'}, status=404)
+            return Response({'error': 'Пользователь не найден.'},
+                            status=status.HTTP_404_NOT_FOUND)
 
         user = authenticate(request, username=username, password=password)
         if user is not None:
             auth_login(request, user)
-            return JsonResponse({'message': 'Удачная авторизация.'}, status=200)
+            return Response({'message': 'Удачная авторизация.'},
+                            status=status.HTTP_200_OK)
         else:
-            return JsonResponse({'error': 'Не верный логин или пароль.'}, status=400)
-    return JsonResponse({'error': 'Метод не разрешён!'}, status=405)
+            return Response({'error': 'Неверный логин или пароль.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        logout(request)
+        return Response({"detail": "Успешный логаут"}, status=status.HTTP_200_OK)
