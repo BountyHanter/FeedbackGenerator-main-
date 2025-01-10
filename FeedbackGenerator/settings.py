@@ -9,11 +9,16 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
+import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from django.contrib import staticfiles
 from dotenv import load_dotenv
+from pythonjsonlogger.json import JsonFormatter
+
+from FeedbackGenerator.utils.mask_data import MaskingFilter
 
 load_dotenv()
 
@@ -46,6 +51,7 @@ INSTALLED_APPS = [
 
     "corsheaders",
     "rest_framework",
+    'drf_spectacular',
     "main_site.apps.MainSiteConfig"
 ]
 
@@ -88,6 +94,8 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'EXCEPTION_HANDLER': 'FeedbackGenerator.utils.exceptions.custom_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+
 }
 
 WSGI_APPLICATION = 'FeedbackGenerator.wsgi.application'
@@ -179,3 +187,109 @@ CSRF_TRUSTED_ORIGINS = [
     os.getenv("ALLOWED_ORIGIN"),  # Адрес фронта
 ]
 CSRF_COOKIE_HTTPONLY = False  # Чтобы фронт мог читать токен из cookie
+
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Мой проект API',
+    'DESCRIPTION': 'API использует cookies (sessionid, csrftoken) и X-CSRFToken для работы.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [
+        {
+            'cookieAuthSession': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'sessionid',  # sessionid используется для аутентификации
+            }
+        },
+        {
+            'cookieAuthCSRF': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'csrftoken',  # csrftoken используется для CSRF
+            }
+        },
+        {
+            'headerCSRF': {
+                'type': 'apiKey',
+                'in': 'header',
+                'name': 'X-CSRFToken',  # X-CSRFToken используется для запросов
+            }
+        },
+    ],
+}
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,  # Не отключать существующие логгеры
+    'formatters': {
+        'json': {
+            '()': JsonFormatter,
+            'fmt': (
+                '%(asctime)s %(name)s %(levelname)s %(message)s '
+                '%(filename)s %(lineno)d %(funcName)s %(module)s'
+            ),
+            'json_ensure_ascii': False,
+        },
+        'console': {
+            'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(data)s',
+        },
+    },
+    'filters': {
+        'mask_sensitive': {
+            '()': MaskingFilter,
+            'fields_to_mask': ['hashed_password'],
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+            'level': 'DEBUG' if DEBUG else 'WARNING',  # Уровень зависит от DEBUG
+        },
+        'file': {
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filters': ['mask_sensitive'],  # Маскируем данные
+            'formatter': 'json',
+            'level': 'DEBUG',
+            'filename': os.path.join(BASE_DIR, 'logs', f'app_{datetime.now().strftime("%Y-%m-%d")}.log'),
+            'when': 'W0',
+            'interval': 1,
+            'backupCount': 4,
+            'encoding': 'utf-8',
+            'utc': False,
+        },
+    },
+    'loggers': {
+        '': {  # Корневой логгер
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console', 'file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'main_site': {  # Логгер для вашего приложения
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
+}
+
+# Получаем корневой логгер
+logger = logging.getLogger(__name__)
+
+if DEBUG:
+    # Логируем начальную конфигурацию
+    logger.debug(f"DEBUG: {DEBUG}")
+    logger.debug(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+    logger.debug(f"DATABASE ENGINE: {DATABASES['default']['ENGINE']}")
+    logger.debug(f"DATABASE NAME: {DATABASES['default']['NAME']}")
+    logger.debug(f"STATIC_ROOT: {STATIC_ROOT}")
+    logger.debug(f"SECRET_KEY: {'Скрыто' if SECRET_KEY == 'default-secret-key' else 'Установлено'}")
+    logger.debug(f"CORS_ALLOWED_ORIGINS: {CORS_ALLOWED_ORIGINS}")
+    logger.debug(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")
