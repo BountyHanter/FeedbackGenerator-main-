@@ -29,10 +29,6 @@ urlpatterns = [
     path('login/', UserLoginAPIView.as_view()),
     path('logout/', LogoutAPIView.as_view()),
     path('', include('main_site.urls')),
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),  # схема OpenAPI
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),  # Swagger UI
-    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),  # ReDoc
-
 ]
 
 

@@ -59,21 +59,21 @@ class DgisFilial(models.Model):
                         extra={'owner_profile': self.profile.pk,
                                'filial_id': self.pk,
                                'dgis_filial_id': self.dgis_filial_id,
-                               'name': self.name,
+                               '_name': self.name,
                                'action': 'create'})
         else:
             logger.info("2GIS Филиал",
                         extra={'owner_profile': self.profile.pk,
                                'filial_id': self.pk,
                                'dgis_filial_id': self.dgis_filial_id,
-                               'name': self.name,
+                               '_name': self.name,
                                'is_active': self.is_active,
                                'action': 'update'})
 
     def delete(self, *args, **kwargs):
         logger.warning("2GIS Филиал",
                        extra={'filial_id': self.pk,
-                              'name': self.name,
+                              '_name': self.name,
                               'action': 'delete'})
 
         super().delete(*args, **kwargs)

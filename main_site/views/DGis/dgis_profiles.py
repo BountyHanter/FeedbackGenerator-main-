@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from FeedbackGenerator.utils.check_method import check_method
 from FeedbackGenerator.utils.logging_templates import log_request_missing_items, log_request_not_allowed, log_response, \
-    log_error_response, log_unexpected_error
+    log_error_response
 from FeedbackGenerator.utils.mask_data import mask_sensitive_data
 from main_site.models.Dgis_models import DgisProfile, DgisFilial
 from main_site.services.Dgis.Dgis_service_api import link_profile_to_2gis
@@ -66,12 +66,6 @@ class DGISProfiles(APIView):
                 return method_check
             return self.link_profile(request, profile_id)
 
-        elif action == 'update':
-            method_check = check_method(request, ['POST'])
-            if method_check:
-                return method_check
-            return self.update_profile(request, profile_id)
-
         log_request_not_allowed(request, action, "POST")
 
         return Response(
@@ -79,9 +73,43 @@ class DGISProfiles(APIView):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
+    def patch(self, request, action=None, profile_id=None):
+        # Разрешённые действия для PATCH
+        allowed_actions = ['update']
+
+        if action not in allowed_actions:
+            log_request_not_allowed(request, action, "PATCH")
+            return Response(
+                {'error': 'Метод не разрешён'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+
+        if action == 'update':
+            return self.update_profile(request, profile_id)
+
+        log_error_response(request=request,
+                           action=action,
+                           service_name="Профиль 2GIS",
+                           exception='Неизвестное действие')
+
+        # Если action не обработан, вернём ошибку (на всякий случай)
+        return Response(
+            {'error': 'Неизвестное действие'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     def create_profile(self, request):
         user = request.user
         data = request.data
+
+        masked_data = mask_sensitive_data(
+            {
+                'user_id': user.id,
+                **data
+            },
+            fields_to_mask=['password']
+        )
+
         logger.debug(f'user: {user.id}\n\ndata: {data}')
 
         required_fields = ['username', 'password']
@@ -97,13 +125,6 @@ class DGISProfiles(APIView):
         username = data.get('username')
         password = data.get('password')
         name = data.get('name', None)  # Поле не обязательно
-
-        masked_data = mask_sensitive_data({
-            'user_id': user.id,
-            'username': username,
-            'hashed_password': password,
-            'name': name,
-        }, ['hashed_password'])
 
         try:
             # Хешируем пароль
@@ -153,8 +174,23 @@ class DGISProfiles(APIView):
     def update_profile(self, request, profile_id):
         user = request.user
         data = request.data
-        logger.debug(f'user: {user.id}\n\ndata: {data}')
-        masked_data = None
+
+        masked_data = mask_sensitive_data(
+            {
+                'user_id': user.id,
+                **data
+            },
+            fields_to_mask=['password']
+        )
+
+        logger.debug(f'user: {user.id}\n\ndata: {masked_data}')
+
+        if not data:
+            log_error_response(service_name='Профили 2GIS(Обновление)',
+                               request=request,
+                               exception='Данные для обновления не переданы',
+                               )
+            return Response({'error': 'Данные для обновления не переданы'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             profile = DgisProfile.objects.get(id=profile_id)
@@ -173,13 +209,6 @@ class DGISProfiles(APIView):
             username = data.get('username')
             password = data.get('password')
             name = data.get('name')
-
-            masked_data = mask_sensitive_data({
-                'user_id': user.id,
-                'username': username,
-                'hashed_password': password,
-                'name': name,
-            }, ['hashed_password'])
 
             if username:
                 profile.username = username

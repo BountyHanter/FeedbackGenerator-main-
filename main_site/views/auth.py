@@ -26,7 +26,7 @@ class UserLoginAPIView(APIView):
                                 status=status.HTTP_403_FORBIDDEN)
         except User.DoesNotExist:
             logger.info(f'Попытка входа',
-                           extra={"username": username, "action": 'login', 'status': 'user_not_found'})
+                        extra={"username": username, "action": 'login', 'status': 'user_not_found'})
             return Response({'error': 'Пользователь не найден.'},
                             status=status.HTTP_404_NOT_FOUND)
 

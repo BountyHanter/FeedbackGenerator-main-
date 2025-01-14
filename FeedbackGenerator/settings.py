@@ -94,7 +94,6 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'EXCEPTION_HANDLER': 'FeedbackGenerator.utils.exceptions.custom_exception_handler',
-    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 
 }
 
@@ -189,37 +188,6 @@ CSRF_TRUSTED_ORIGINS = [
 CSRF_COOKIE_HTTPONLY = False  # Чтобы фронт мог читать токен из cookie
 
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'Мой проект API',
-    'DESCRIPTION': 'API использует cookies (sessionid, csrftoken) и X-CSRFToken для работы.',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'SECURITY': [
-        {
-            'cookieAuthSession': {
-                'type': 'apiKey',
-                'in': 'cookie',
-                'name': 'sessionid',  # sessionid используется для аутентификации
-            }
-        },
-        {
-            'cookieAuthCSRF': {
-                'type': 'apiKey',
-                'in': 'cookie',
-                'name': 'csrftoken',  # csrftoken используется для CSRF
-            }
-        },
-        {
-            'headerCSRF': {
-                'type': 'apiKey',
-                'in': 'header',
-                'name': 'X-CSRFToken',  # X-CSRFToken используется для запросов
-            }
-        },
-    ],
-}
-
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,  # Не отключать существующие логгеры
@@ -279,17 +247,3 @@ LOGGING = {
         },
     },
 }
-
-# Получаем корневой логгер
-logger = logging.getLogger(__name__)
-
-if DEBUG:
-    # Логируем начальную конфигурацию
-    logger.debug(f"DEBUG: {DEBUG}")
-    logger.debug(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
-    logger.debug(f"DATABASE ENGINE: {DATABASES['default']['ENGINE']}")
-    logger.debug(f"DATABASE NAME: {DATABASES['default']['NAME']}")
-    logger.debug(f"STATIC_ROOT: {STATIC_ROOT}")
-    logger.debug(f"SECRET_KEY: {'Скрыто' if SECRET_KEY == 'default-secret-key' else 'Установлено'}")
-    logger.debug(f"CORS_ALLOWED_ORIGINS: {CORS_ALLOWED_ORIGINS}")
-    logger.debug(f"CSRF_TRUSTED_ORIGINS: {CSRF_TRUSTED_ORIGINS}")

@@ -238,7 +238,7 @@ class APIDGISReviews(APIView):
     # --------------------------------------------------
     # Вспомогательный асинхронный метод для запросов
     # --------------------------------------------------
-    async def _async_post(self, url, payload, headers):
+    async def _async_post(self, url, payload):
         """
         Асинхронный POST-запрос, возвращаем либо httpx.Response (если всё ок),
         либо DRF Response (если словили RequestError).
