@@ -1,0 +1,6 @@
+nav:
+  - "Установка (Linux)": installation_linux.md
+  - "Установка (Win)": installation_win.md
+  - "Запуск проекта": start_project.md
+  - "Конфигурация": config.md
+  - "Использование": usage.md
