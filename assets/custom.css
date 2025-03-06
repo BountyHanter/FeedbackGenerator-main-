@@ -1,0 +1,35 @@
+.md-typeset .headerlink {
+    font-size: 0.5em; /* Сделать значок меньше */
+    transform: translateY(-2px);
+    transition: opacity 0.2s;
+    margin-left: .5rem;
+
+}
+
+.md-typeset .headerlink:hover {
+    opacity: 1; /* Полностью видимый при наведении */
+}
+
+.custom-tooltip {
+    position: absolute;
+    background-color: hsl(213, 16%, 11%); /* Темный синий-черный */
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px; /* Чуть меньше */
+    font-weight: bold; /* Жирный текст */
+    font-family: "Roboto", sans-serif; /* Заменить шрифт */
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    pointer-events: none; /* Tooltip не мешает кликам */
+
+    /* Размещение по центру */
+    left: 50%;
+    transform: translateX(-50%) translateY(25px); /* Центрируем и чуть ниже */
+}
+
+/* Добавляем анимацию появления */
+.headerlink:hover .custom-tooltip {
+    opacity: 1;
+}
